@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -51,22 +52,44 @@ import edu.gvsu.cis.worder.ui.theme.WorderTheme
 fun GameScreen(modifier: Modifier = Modifier, viewModel: AppViewModel) {
     val stockLetters by viewModel.sourceLetters.collectAsState()
     val arrangedLetters by viewModel.targetLetters.collectAsState()
-
+    val tScore by viewModel.totalScore.collectAsState()
+    val wScore by viewModel.wordScore.collectAsState()
+    val words by viewModel.wordsFound.collectAsState()
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier
             .fillMaxSize()
             .padding(top = 24.dp)
     ) {
+        //need a row of buttons
+        Row(
+            modifier = Modifier.align(Alignment.TopCenter)
 
-        Button(
-            modifier = Modifier.align(Alignment.TopCenter),
-            onClick = {
-                viewModel.selectRandomLetters()
-            },
-        ) {
-            Text("New Game")
+        ){
+            Button(
+                onClick = {
+                    viewModel.selectRandomLetters()
+                },
+            ) {
+                Text("New Game")
+            }
+            Button(
+                onClick = {
+                    viewModel.ReshuffleRemaining()
+                },
+            ) {
+                Text("Reshuffle")
+            }
+            Button(
+                onClick = {
+                    viewModel.submitWord()
+                },
+                enabled = wScore>0
+            ) {
+                Text("Record Word")
+            }
         }
+
 
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -79,12 +102,19 @@ fun GameScreen(modifier: Modifier = Modifier, viewModel: AppViewModel) {
                 println("Bottom box rearrange $it")
                 viewModel.rearrangeLetters(Origin.Stock, it.filterNotNull())
             }
+            //Display scores
+            Text("Words Recorded: $words")
+            Text("Word Score: $wScore")
+            Text("Total Score: $tScore")
+//            Button(onClick = { val wordFound = viewModel.submitWord()}){
+//                Text("Submit")
+//            }
         }
     }
 }
 
 @Composable
-fun BigLetter(modifier: Modifier = Modifier, letter: Char?, cellSize: Dp = 48.dp) {
+fun BigLetter(modifier: Modifier = Modifier, letter: Letter?, cellSize: Dp = 48.dp) {
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier
@@ -94,12 +124,38 @@ fun BigLetter(modifier: Modifier = Modifier, letter: Char?, cellSize: Dp = 48.dp
                 if (letter == null) Color.Transparent else Color.Green,
                 shape = RoundedCornerShape(8.dp)
             )
+            .padding(3.dp)
     ) {
         Text(
-            letter?.toString() ?: "",
+            letter?.text?.toString() ?: "",
             fontSize = (cellSize * 0.7f).value.sp,
             textAlign = TextAlign.Center
         )
+
+        //have to display if mre than 1
+        if (letter != null && letter.letterMultiplier > 1) {
+            Text(
+                text = "L${letter.letterMultiplier}",
+                fontSize = 10.sp,
+                modifier = Modifier.align(Alignment.TopEnd)
+            )
+        }
+        if(letter!=null && letter.wordMultiplier>1)
+        {
+            Text(
+                text = "W${letter.wordMultiplier}",
+                fontSize = 10.sp,
+                modifier = Modifier.align(Alignment.BottomStart)
+            )
+        }
+        //just the point value
+        if(letter!= null){
+            Text(
+                text = letter.point.toString(),
+                fontSize = 10.sp,
+                modifier = Modifier.align(Alignment.BottomEnd)
+            )
+        }
     }
 
 }
@@ -144,8 +200,8 @@ fun LetterGroup(
                 val ev = event.toAndroidDragEvent()
                 val dropData = ev.clipData.getItemAt(0).text
                 // Decode the string payload (text and point separated by '/')
-                val (text,point) = dropData.split("/")
-                val letterObject = Letter(text.first(),point.toInt())
+                val (text,point, lMult, wMult) = dropData.split("/")
+                val letterObject = Letter(text.first(),point.toInt(), lMult.toInt(), wMult.toInt())
                 // Drop the letter to the empty cell
                 if (emptyCellIndex != null) {
                     mutLetters[emptyCellIndex!!] = letterObject
@@ -221,7 +277,7 @@ fun LetterGroup(
                 // Can't use only position as key: reordering won't work correctly
                 // Can't use only character as key: the list may contain duplicate letters
                 itemsIndexed(mutLetters, key = { pos, item -> "$pos-" + (item?.text ?: "#") }) { pos, lx ->
-                    BigLetter(letter = lx?.text, cellSize = letterSize.coerceAtMost(80.dp),
+                    BigLetter(letter = lx, cellSize = letterSize.coerceAtMost(80.dp),
                         modifier = Modifier.dragAndDropSource {
                         detectTapGestures(onLongPress = {
                             startDragIndex = pos
@@ -233,7 +289,7 @@ fun LetterGroup(
                                     clipData = ClipData.newPlainText(
                                         "",
                                         // Some hack here: unpack the object details as a string
-                                        "${lx?.text ?: "$"}/${lx?.point}"
+                                        "${lx?.text ?: "$"}/${lx?.point}/${lx?.letterMultiplier}/${lx?.wordMultiplier}"
                                     )
                                 )
                             )
@@ -249,7 +305,7 @@ fun LetterGroup(
 @Composable
 fun GameScreenPreview() {
     WorderTheme {
-        val appVM = AppViewModel()
+        val appVM = AppViewModel(android.app.Application())
         GameScreen(viewModel = appVM)
     }
 }
